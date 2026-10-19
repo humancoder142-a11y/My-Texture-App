@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Realistic Albedo Material Factory — Master Studio</title>
+  <style>
+    :root {
+      --bg-dark: #080a0e;
+      --bg-panel: #11141b;
+      --bg-card: #181d26;
+      --border: #232a36;
+      --accent: #2563eb;
+      --accent-hover: #3b82f6;
+      --danger: #dc2626;
+      --success: #10b981;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-mono: "JetBrains Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    /* Top Bar with Horizontal Touch Scrolling on Mobile */
+    header {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      flex-shrink: 0;
+      z-index: 30;
+    }
+    header::-webkit-scrollbar { height: 3px; }
+    header::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 800;
+      font-size: 0.88rem;
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+    .badge-godot {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      font-size: 0.62rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .btn {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 9px;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #222936; border-color: #384357; }
+    .btn.active { background: var(--accent); color: #fff; border-color: var(--accent-hover); }
+    .btn-primary { background: var(--accent); border-color: var(--accent-hover); color: #fff; }
+    .btn-success { background: rgba(16, 185, 129, 0.2); border-color: var(--success); color: #34d399; }
+    .btn-danger { background: rgba(220, 38, 38, 0.2); border-color: var(--danger); color: #f87171; }
+
+    /* App Workspace */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      flex-direction: column;
+    }
+    @media (min-width: 900px) {
+      .app-body { flex-direction: row; }
+    }
+
+    /* Canvas Stage Area */
+    .canvas-stage {
+      background: #05070a;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      flex-shrink: 0;
+      height: 300px;
+      overflow: hidden;
+      touch-action: none;
+    }
+    @media (min-width: 900px) {
+      .canvas-stage {
+        flex: 1;
+        height: auto;
+        border-bottom: none;
+        border-left: 1px solid var(--border);
+        order: 2;
+      }
+    }
+
+    .stage-hud {
+      position: absolute;
+      top: 8px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .stage-hud > * { pointer-events: auto; }
+
+    .view-pills {
+      background: rgba(17, 20, 27, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2px;
+      display: flex;
+      gap: 2px;
+    }
+    .pill-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      padding: 3px 8px;
+      border-radius: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .pill-btn.active { background: var(--accent); color: #fff; }
+
+    .canvas-wrap {
+      border: 2px solid #283244;
+      border-radius: 6px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+      background: #090c12;
+      line-height: 0;
+      position: relative;
+    }
+    canvas {
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-crisp-edges;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+    }
+
+    .status-toast {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 20, 27, 0.9);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      color: #38bdf8;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Controls Panel */
+    .controls-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+      overflow: hidden;
+    }
+    @media (min-width: 900px) {
+      .controls-panel {
+        width: 420px;
+        flex: none;
+        order: 1;
+      }
+    }
+
+    .nav-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: #0d1016;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 9px 8px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      text-align: center;
+    }
+    .tab-btn.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: none;
+    }
+    .tab-content.active { display: block; }
+
+    .control-row { margin-bottom: 11px; }
+    .control-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.71rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .control-row label span.val {
+      color: #60a5fa;
+      font-family: var(--font-mono);
+    }
+    select, input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #080a0f;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; height: 4px; }
+
+    /* Directional Button Matrix */
+    .dir-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .dir-btn {
+      background: #181d26;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 4px;
+      padding: 6px 2px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+    .dir-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent-hover);
+    }
+
+    /* Counter Stepper */
+    .stepper {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .stepper button {
+      width: 32px;
+      height: 30px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .stepper-val {
+      flex: 1;
+      text-align: center;
+      background: #080a0f;
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #60a5fa;
+      font-weight: 700;
+    }
+
+    /* Palette Box & Swatches */
+    .palette-box {
+      background: #090c12;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px;
+      margin-bottom: 12px;
+    }
+    .swatches-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-height: 24px;
+      align-items: center;
+    }
+    .color-chip {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      cursor: pointer;
+    }
+
+    /* Library Grid */
+    .block-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 5px;
+    }
+    .block-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+    }
+    .block-card:hover { border-color: var(--accent); background: #1e2430; }
+    .block-card.active { border-color: var(--accent-hover); background: rgba(37, 99, 235, 0.2); }
+    .block-card h5 { font-size: 0.74rem; font-weight: 700; }
+    .block-card p { font-size: 0.62rem; color: var(--text-muted); }
+
+    footer {
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      padding: 4px 10px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Action Bar -->
+  <header>
+    <div class="brand">
+      <span>Texture Factory</span>
+      <span class="badge-godot">Preserved Modifiers</span>
+    </div>
+    <div style="display:flex; gap:5px; align-items:center;">
+      <button class="btn btn-success" id="btnVariation">🔀 New Variation (Palette)</button>
+      <button class="btn" id="btnSeed">🎲 New Seed (Color Shift)</button>
+      <button class="btn btn-primary" id="btnExport">⬇️ Export PNG</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- Top Canvas Stage -->
+    <div class="canvas-stage" id="canvasStage">
+      <div class="stage-hud">
+        <div class="view-pills">
+          <button class="pill-btn" data-view="single">Single Block</button>
+          <button class="pill-btn active" data-view="tiled">3 × 3 Seamless</button>
+          <button class="pill-btn" data-view="cube">3D Voxel</button>
+        </div>
+        <div style="font-size:0.7rem; font-family:var(--font-mono); color:#60a5fa;" id="hudResBadge">32 × 32 px</div>
+      </div>
+
+      <!-- Main Canvas Container -->
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="viewCanvas" width="512" height="512"></canvas>
+      </div>
+
+      <div class="status-toast" id="statusToast">Ready</div>
+    </div>
+
+    <!-- Controls Panel -->
+    <aside class="controls-panel">
+      <div class="nav-tabs">
+        <button class="tab-btn active" data-tab="tab-geometry">🧱 Shape & Lines</button>
+        <button class="tab-btn" data-tab="tab-flora">🌿 Flora & Moss</button>
+        <button class="tab-btn" data-tab="tab-damage">💥 Damage & Mud</button>
+        <button class="tab-btn" data-tab="tab-color">🎨 Palette & Res</button>
+        <button class="tab-btn" data-tab="tab-library">📚 Library</button>
+      </div>
+
+      <!-- 1. Geometry & Scale Tab (Preserved Shape) -->
+      <div class="tab-content active" id="tab-geometry">
+        <div class="control-row">
+          <label>Brick Bond Geometry (Shape)</label>
+          <select id="brickShapeSelect">
+            <option value="running" selected>Classic Stretcher Running Bond</option>
+            <option value="stack">Square Grid Stack Bond (সমান্তরাল ইট)</option>
+            <option value="zigzag">Herringbone / Zigzag Paver (জিগজ্যাগ)</option>
+            <option value="diamond">Diamond / Hexagonal Masonry (ডায়মন্ড)</option>
+            <option value="vertical">Vertical Soldier Bond (খাড়া ইট)</option>
+          </select>
+        </div>
+
+        <div class="control-row">
+          <label>Horizontal Brick Courses (লাইন সংখ্যা)</label>
+          <div class="stepper">
+            <button id="btnLineMinus">−</button>
+            <div class="stepper-val" id="lineCountVal">4 Courses (Lines)</div>
+            <button id="btnLinePlus">+</button>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label>Bricks Per Row (ইটের প্রস্থ/সংখ্যা)</label>
+          <div class="stepper">
+            <button id="btnColMinus">−</button>
+            <div class="stepper-val" id="colCountVal">2 Bricks / Row</div>
+            <button id="btnColPlus">+</button>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label>Mortar Joint Thickness (সিমেন্ট ফাঁকা) <span class="val" id="mortarThickVal">1.0px</span></label>
+          <input type="range" id="paramMortar" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-row">
+          <label>3D Albedo Depth & Bevels (গভীরতা) <span class="val" id="bevelVal">0.7</span></label>
+          <input type="range" id="paramBevel" min="0.0" max="1.5" step="0.1" value="0.7">
+        </div>
+      </div>
+
+      <!-- 2. Flora, Vines & Moss Tab (Directional Growth) -->
+      <div class="tab-content" id="tab-flora">
+        <div class="control-row">
+          <label>Growth Accumulation Direction (দিক নির্বাচন)</label>
+          <div class="dir-grid">
+            <div class="dir-btn active" data-dir="all">🌐 All</div>
+            <div class="dir-btn" data-dir="top">⬆️ Top</div>
+            <div class="dir-btn" data-dir="bottom">⬇️ Bottom</div>
+            <div class="dir-btn" data-dir="left">⬅️ Left</div>
+            <div class="dir-btn" data-dir="right">➡️ Right</div>
+            <div class="dir-btn" data-dir="center">🎯 Center</div>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label>Creeping Leaves & Vines (লতাপাতা) <span class="val" id="leavesVal">0.0</span></label>
+          <input type="range" id="paramLeaves" min="0.0" max="1.0" step="0.05" value="0.0">
+        </div>
+
+        <div class="control-row">
+          <label>Velvet Moss & Lichen (শ্যাওলা) <span class="val" id="mossVal">0.0</span></label>
+          <input type="range" id="paramMoss" min="0.0" max="1.0" step="0.05" value="0.0">
+        </div>
+
+        <div class="control-row">
+          <label>Bottom Grass Climb (নিচ থেকে ঘাস ওঠা) <span class="val" id="grassClimbVal">0.0</span></label>
+          <input type="range" id="paramGrassClimb" min="0.0" max="1.0" step="0.05" value="0.0">
+        </div>
+      </div>
+
+      <!-- 3. Damage, Impact & Mud Tab -->
+      <div class="tab-content" id="tab-damage">
+        <div class="control-row">
+          <label>Damage / Mud Direction (ক্ষতি ও কাদার দিক)</label>
+          <div class="dir-grid" id="damageDirGrid">
+            <div class="dir-btn active" data-damdir="all">🌐 All</div>
+            <div class="dir-btn" data-damdir="top">⬆️ Top</div>
+            <div class="dir-btn" data-damdir="bottom">⬇️ Bottom</div>
+            <div class="dir-btn" data-damdir="left">⬅️ Left</div>
+            <div class="dir-btn" data-damdir="right">➡️ Right</div>
+            <div class="dir-btn" data-damdir="center">🎯 Center</div>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label>Ballistic / Vehicle Impact (গোলার দাগ/ফাটল) <span class="val" id="impactVal">0.0</span></label>
+          <input type="range" id="paramImpact" min="0.0" max="1.0" step="0.05" value="0.0">
+        </div>
+
+        <div class="control-row">
+          <label>Corner Breaks & Void (কোণা ভাঙা) <span class="val" id="breakVal">0.0</span></label>
+          <input type="range" id="paramBreak" min="0.0" max="1.0" step="0.05" value="0.0">
+        </div>
+
+        <div class="control-row">
+          <label>Splashed Dirt & Mud (কাদামাটি) <span class="val" id="mudVal">0.0</span></label>
+          <input type="range" id="paramMud" min="0.0" max="1.0" step="0.05" value="0.0">
+        </div>
+
+        <div class="control-row">
+          <label>Weathered Chipping & Salts (ক্ষয় ও লবণ) <span class="val" id="weatherVal">0.4</span></label>
+          <input type="range" id="paramWeather" min="0.0" max="1.5" step="0.1" value="0.4">
+        </div>
+      </div>
+
+      <!-- 4. Palette & Resolution Tab -->
+      <div class="tab-content" id="tab-color">
+        <div class="control-row">
+          <label>Texture Resolution</label>
+          <select id="resSelect">
+            <option value="16">16 × 16 (Classic Retro Pixel)</option>
+            <option value="32" selected>32 × 32 (Standard Faithful Voxel)</option>
+            <option value="64">64 × 64 (Dense Voxel HD)</option>
+            <option value="128">128 × 128 (Detailed Game Asset)</option>
+            <option value="256">256 × 256 (High Definition)</option>
+            <option value="512">512 × 512 (Ultra Detailed 1:1)</option>
+          </select>
+        </div>
+
+        <div class="control-row">
+          <label>Active Palette Style</label>
+          <select id="palTypeSelect">
+            <option value="albedo" selected>Albedo (Clean Pure PBR)</option>
+            <option value="realistic">Realistic (Earthy & Natural)</option>
+            <option value="fantasy">Fantasy (Vibrant & Warm)</option>
+            <option value="shadow">Shadow (Deep Ambient Cave)</option>
+          </select>
+        </div>
+
+        <div class="palette-box">
+          <div style="font-size:0.68rem; font-weight:700; color:#888; margin-bottom:6px;">ACTIVE BASE COLORS:</div>
+          <div class="swatches-grid" id="activeSwatches"></div>
+        </div>
+
+        <div class="control-row">
+          <label>Seed <span class="val" id="seedVal">427223</span></label>
+          <input type="number" id="seedInput" value="427223">
+        </div>
+
+        <div class="control-row">
+          <label>Color Variegation <span class="val" id="colorVarVal">1.0</span></label>
+          <input type="range" id="paramColorVar" min="0.2" max="2.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- 5. Library Tab -->
+      <div class="tab-content" id="tab-library">
+        <div class="block-grid" id="catalogList"></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <span>● Layered Preservation Engine Active</span>
+    <span id="footMat">Block: Stone Bricks</span>
+    <span>Zero Baked Directional Shadows</span>
+  </footer>
+
+  <canvas id="masterBuffer" style="display:none;"></canvas>
+
+  <script>
+    /* ==========================================================================
+       1. GLOBAL ARCHITECTURAL PALETTES
+       ========================================================================== */
+    const Palettes = {
+      stone_bricks: {
+        albedo: ['#7A4A2E','#8B5A3A','#6B3F28','#9A6B4A','#5C3A24','#453a32'],
+        realistic: ['#8B4513','#A0522D','#6B3A1F','#C4A484','#5D4037','#3e322a'],
+        fantasy: ['#A63D2F','#C75B39','#8B2E1F','#E07A5F','#5C1A12','#33140e'],
+        shadow: ['#4A2C1A','#5C3A24','#3D2415','#6B452C','#2F1A0E','#1a0e08']
+      },
+      grass: {
+        albedo: ['#2E6B3A','#3A7A48','#246030','#4A8A58','#1E5028','#142612'],
+        realistic: ['#2E8B57','#3CB371','#228B22','#006400','#2E7D32','#1a3818'],
+        fantasy: ['#1A8F5A','#2ABA6E','#0F7A45','#3ED48A','#0A5C35','#073820'],
+        shadow: ['#1A3F24','#244F2E','#12301A','#2E5F38','#0E2412','#08140a']
+      },
+      lava: {
+        albedo: ['#2A2A2E','#3A1A14','#B82612','#F56614','#FFC024','#FFF8D0'],
+        realistic: ['#202024','#4A1208','#DC143C','#FF4500','#FFD700','#FFFFE0'],
+        fantasy: ['#181024','#66082A','#FF0055','#FF5500','#FFCC00','#FFFFFF'],
+        shadow: ['#121214','#240804','#6A1008','#8A2010','#B83818','#FFE8A0']
+      },
+      water: {
+        albedo: ['#184C76','#2C84A8','#78DAEE','#1A6A9A','#3A8ABA'],
+        realistic: ['#0E3858','#1E88E5','#00BFFF','#87CEEB','#E0F7FA'],
+        fantasy: ['#142850','#0090CC','#00E5FF','#40F0FF','#E0FFFF'],
+        shadow: ['#0A2035','#144060','#206085','#3080A5','#60B0D0']
+      },
+      dirt: {
+        albedo: ['#5A4030','#6B4E3A','#4A3224','#7A5A42','#3D2A1C','#8a847e'],
+        realistic: ['#5C4033','#6F4E37','#8B5A2B','#3D2B1F','#4E342E','#7a7068'],
+        fantasy: ['#6B3A2A','#8B4A32','#A05A3A','#4A2218','#C07050','#5a4234'],
+        shadow: ['#3A281C','#4A3224','#2F1E14','#5A4030','#241810','#423830']
+      },
+      cobblestone: {
+        albedo: ['#6A6A6A','#7A7A7A','#5A5A5A','#8A8A8A','#4A4A4A','#3a3a3a'],
+        realistic: ['#6B6B6B','#808080','#4A4A4A','#A0A0A0','#555555','#333333'],
+        fantasy: ['#5C6B7A','#7A8A9A','#4A5A6A','#9AAABA','#3A4A5A','#25303a'],
+        shadow: ['#3A3A3A','#4A4A4A','#2A2A2A','#5A5A5A','#1F1F1F','#141414']
+      },
+      wood_oak: {
+        albedo: ['#A28058','#7C5E3E','#B08E64','#684C2E','#38281A'],
+        realistic: ['#8B5A2B','#A06A38','#6B4423','#C19A6B','#5D4037'],
+        fantasy: ['#B87333','#D28445','#8B4513','#E09A55','#5A280A'],
+        shadow: ['#4E3420','#5C3E26','#3A2414','#6E4C30','#28180C']
+      },
+      deepslate: {
+        albedo: ['#2A2A2E','#424248','#54545C','#36363C','#1E1E22'],
+        realistic: ['#222226','#38383E','#4C4C54','#303034','#18181A'],
+        fantasy: ['#242636','#383C54','#4E5478','#2E3248','#181A28'],
+        shadow: ['#161618','#26262A','#34343A','#202024','#101012']
+      }
+    };
+
+    /* ==========================================================================
+       2. PROCEDURAL NOISE CORE
+       ========================================================================== */
+    class ProceduralCore {
+      constructor(seed = 427223) { this.reseed(seed); }
+      reseed(seed) {
+        this.seed = (seed >>> 0);
+        this.perm = new Uint8Array(512);
+        let p = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) p[i] = i;
+        let s = (this.seed ^ 0x6D2B79F5) >>> 0;
+        for (let i = 255; i > 0; i--) {
+          s = (Math.imul(s ^ (s >>> 15), 0x5cd0) + 1) >>> 0;
+          let r = s % (i + 1);
+          let tmp = p[i]; p[i] = p[r]; p[r] = tmp;
+        }
+        for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+      }
+      noise2D(x, y, periodX, periodY) {
+        periodX = Math.max(1, Math.round(periodX));
+        periodY = Math.max(1, Math.round(periodY));
+        let x0 = Math.floor(x), y0 = Math.floor(y);
+        let fx = x - x0, fy = y - y0;
+        let xi0 = ((x0 % periodX) + periodX) % periodX;
+        let yi0 = ((y0 % periodY) + periodY) % periodY;
+        let xi1 = (xi0 + 1) % periodX;
+        let yi1 = (yi0 + 1) % periodY;
+
+        const GRAD = [[1,0],[-1,0],[0,1],[0,-1],[0.707,0.707],[-0.707,0.707],[0.707,-0.707],[-0.707,-0.707]];
+        let g00 = GRAD[this.perm[(this.perm[xi0 & 255] + yi0) & 255] & 7];
+        let g10 = GRAD[this.perm[(this.perm[xi1 & 255] + yi0) & 255] & 7];
+        let g01 = GRAD[this.perm[(this.perm[xi0 & 255] + yi1) & 255] & 7];
+        let g11 = GRAD[this.perm[(this.perm[xi1 & 255] + yi1) & 255] & 7];
+
+        let d00 = g00[0] * fx + g00[1] * fy;
+        let d10 = g10[0] * (fx - 1) + g10[1] * fy;
+        let d01 = g01[0] * fx + g01[1] * (fy - 1);
+        let d11 = g11[0] * (fx - 1) + g11[1] * (fy - 1);
+
+        let u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+        let v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+        return (d00 * (1 - u) + d10 * u) * (1 - v) + (d01 * (1 - u) + d11 * u) * v;
+      }
+      fbm(x, y, periodX, periodY, octaves = 3) {
+        let total = 0, freq = 1, amp = 1, max = 0;
+        for (let i = 0; i < octaves; i++) {
+          total += this.noise2D(x * freq, y * freq, periodX * freq, periodY * freq) * amp;
+          max += amp; amp *= 0.5; freq *= 2;
+        }
+        return (total / max + 1) * 0.5;
+      }
+      worley(u, v, cellsX, cellsY) {
+        cellsX = Math.max(1, Math.round(cellsX));
+        cellsY = Math.max(1, Math.round(cellsY));
+        let px = u * cellsX, py = v * cellsY;
+        let cellX = Math.floor(px), cellY = Math.floor(py);
+        let minDist1 = 999.0, minDist2 = 999.0, cellHash = 0;
+
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            let cx = ((cellX + dx) % cellsX + cellsX) % cellsX;
+            let cy = ((cellY + dy) % cellsY + cellsY) % cellsY;
+            let h1 = this.perm[(this.perm[cx & 255] + cy) & 255] / 255.0;
+            let h2 = this.perm[(this.perm[cy & 255] + (cx + 31)) & 255] / 255.0;
+            let ptX = (cellX + dx) + (h1 - 0.5);
+            let ptY = (cellY + dy) + (h2 - 0.5);
+            let dist = Math.hypot(px - ptX, py - ptY);
+            if (dist < minDist1) {
+              minDist2 = minDist1; minDist1 = dist; cellHash = h1;
+            } else if (dist < minDist2) {
+              minDist2 = dist;
+            }
+          }
+        }
+        return { f1: minDist1, f2: minDist2, edge: Math.max(0, minDist2 - minDist1), id: cellHash };
+      }
+    }
+
+    /* Helper Math */
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function lerpRGB(c1, c2, t) {
+      t = Math.max(0, Math.min(1, t));
+      return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+    }
+    function hexToRgb(h) {
+      let b = parseInt(h.replace('#',''), 16);
+      return [(b >> 16) & 255, (b >> 8) & 255, b & 255];
+    }
+    function rgbToHex(r, g, b) {
+      return "#" + ((1 << 24) + (Math.round(r) << 16) + (Math.round(g) << 8) + Math.round(b)).toString(16).slice(1);
+    }
+
+    /* Directional Weight Calculator */
+    function getDirectionWeight(u, v, dir) {
+      if (dir === 'top') return Math.max(0, 1.0 - v * 1.5);
+      if (dir === 'bottom') return Math.max(0, v * 1.5 - 0.5);
+      if (dir === 'left') return Math.max(0, 1.0 - u * 1.5);
+      if (dir === 'right') return Math.max(0, u * 1.5 - 0.5);
+      if (dir === 'center') return Math.max(0, 1.0 - Math.hypot(u - 0.5, v - 0.5) * 2.2);
+      return 1.0; // 'all'
+    }
+
+    /* ==========================================================================
+       3. PRESERVED LAYERED MATERIAL PIPELINE
+       ========================================================================== */
+    const State = {
+      resolution: 32,
+      material: 'stone_bricks',
+      seed: 427223,
+      paletteType: 'albedo',
+      activeColors: [],
+      viewMode: 'tiled',
+
+      // Preserved Shape & Lines
+      shape: 'running',  // 'running', 'stack', 'zigzag', 'diamond', 'vertical'
+      numRows: 4,        // 2, 3, 4, 6, 8 lines
+      numCols: 2,        // 2, 3, 4 columns
+      mortarThick: 1.0,
+      bevel: 0.7,
+
+      // Directional Flora Layers
+      floraDir: 'all',
+      leaves: 0.0,
+      moss: 0.0,
+      grassClimb: 0.0,
+
+      // Directional Damage & Mud Layers
+      damageDir: 'all',
+      impact: 0.0,
+      breaks: 0.0,
+      mud: 0.0,
+      weather: 0.4,
+      colorVar: 1.0
+    };
+
+    const core = new ProceduralCore(State.seed);
+    const masterBuffer = document.getElementById('masterBuffer');
+    const masterCtx = masterBuffer.getContext('2d', { willReadFrequently: true });
+    const viewCanvas = document.getElementById('viewCanvas');
+    const viewCtx = viewCanvas.getContext('2d');
+
+    /* The Unified Layered Synthesis Function */
+    function synthesizePixel(u, v) {
+      const colors = State.activeColors;
+      const size = State.resolution;
+      let baseCol;
+
+      if (State.material === 'stone_bricks') {
+        let x = Math.floor(u * size);
+        let y = Math.floor(v * size);
+
+        let nr = State.numRows;
+        let nc = State.numCols;
+        let bh = size / nr;
+        let bw = size / nc;
+
+        let row = Math.floor(y / bh) % nr;
+        let off = 0;
+
+        if (State.shape === 'running') {
+          off = (row % 2) * (bw / 2);
+        } else if (State.shape === 'zigzag') {
+          off = (row % 4) * (bw / 4);
+        } else if (State.shape === 'diamond') {
+          let diag = (x + y) / (bw / 1.4);
+          row = Math.floor(diag) % nr;
+          off = (row % 2) * (bw / 2);
+        } else if (State.shape === 'vertical') {
+          // Invert rows and cols
+          let tmp = bw; bw = bh; bh = tmp;
+          off = (Math.floor(x / bw) % 2) * (bh / 2);
+        }
+
+        // Mortar Detection (Seamless wrapping modulo)
+        let isMortar = false;
+        let mWidth = Math.max(1, Math.round(State.mortarThick));
+        if ((y % Math.floor(bh) < mWidth) || (((x + off) % Math.floor(bw)) < mWidth)) {
+          isMortar = true;
+        }
+
+        if (isMortar) {
+          let mHex = colors[colors.length - 1] || '#453a32';
+          baseCol = hexToRgb(mHex);
+        } else {
+          // Perfectly seamless column modulo index!
+          let col = Math.floor((x + off) / bw) % nc;
+          let brickHash = core.perm[(col * 41 + row * 79 + 17) & 255] / 255.0;
+          let colIdx = Math.floor(brickHash * (colors.length - 1));
+          baseCol = hexToRgb(colors[colIdx] || colors[0]);
+
+          // Micro-cavity 3D bevel (Pure Albedo depth)
+          if (State.bevel > 0.05) {
+            let edgeDistX = Math.min((x + off) % Math.floor(bw), Math.floor(bw) - ((x + off) % Math.floor(bw)));
+            let edgeDistY = Math.min(y % Math.floor(bh), Math.floor(bh) - (y % Math.floor(bh)));
+            let edgeDist = Math.min(edgeDistX, edgeDistY);
+            if (edgeDist < 2) {
+              baseCol = lerpRGB(baseCol, [baseCol[0]*0.65, baseCol[1]*0.65, baseCol[2]*0.65], (2 - edgeDist) * 0.4 * State.bevel);
+            }
+          }
+        }
+      } else {
+        // Fallback for terrain/other Minecraft blocks
+        let fbm = core.fbm(u * 8, v * 8, 8, 8, 3);
+        baseCol = hexToRgb(colors[Math.floor(fbm * (colors.length - 1))]);
+      }
+
+      // --- ADDITIVE LAYER 1: WEATHERING & EFFLORESCENCE ---
+      if (State.weather > 0.1) {
+        let salt = core.fbm(u * 16, v * 16, 16, 16, 3);
+        if (salt > 0.6) {
+          baseCol = lerpRGB(baseCol, [235, 235, 235], (salt - 0.6) * 1.5 * State.weather);
+        }
+      }
+
+      // --- ADDITIVE LAYER 2: BALLISTIC IMPACT & CORNER BREAKS ---
+      let damWeight = getDirectionWeight(u, v, State.damageDir);
+
+      if (State.breaks > 0.05) {
+        let cornerDist = Math.hypot(u - 1.0, v - 0.0);
+        if (cornerDist < 0.35 * State.breaks * damWeight) {
+          let rubble = core.noise2D(u * 32, v * 32, 32, 32);
+          baseCol = lerpRGB([32, 28, 26], [62, 54, 48], (rubble + 1) * 0.5);
+        }
+      }
+
+      if (State.impact > 0.05) {
+        let centerDist = Math.hypot(u - 0.5, v - 0.5);
+        if (centerDist < 0.28 * State.impact * damWeight) {
+          let shockRing = Math.sin(centerDist * 40.0);
+          baseCol = lerpRGB([24, 20, 18], baseCol, centerDist / (0.28 * State.impact));
+          if (shockRing > 0.5) baseCol = [baseCol[0]*0.5, baseCol[1]*0.5, baseCol[2]*0.5];
+        }
+      }
+
+      // --- ADDITIVE LAYER 3: SPLASHED DIRT & MUD ---
+      if (State.mud > 0.05) {
+        let mudNoise = core.fbm(u * 12, v * 12, 12, 12, 3);
+        let mudIntensity = mudNoise * damWeight * State.mud * 1.8;
+        if (mudIntensity > 0.3) {
+          baseCol = lerpRGB(baseCol, [78, 52, 34], Math.min(1.0, (mudIntensity - 0.3) * 2.2));
+        }
+      }
+
+      // --- ADDITIVE LAYER 4: CREEPING LEAVES & VINES ---
+      let floraWeight = getDirectionWeight(u, v, State.floraDir);
+
+      if (State.leaves > 0.05) {
+        let vineNoise = core.worley(u, v, 8, 8);
+        if (vineNoise.f1 < 0.28 * State.leaves * floraWeight) {
+          let leafCol = [56, 128, 42];
+          let vein = core.noise2D(u * 32, v * 32, 32, 32);
+          if (vein > 0.4) leafCol = [88, 168, 54];
+          baseCol = lerpRGB(baseCol, leafCol, 0.92);
+        }
+      }
+
+      // --- ADDITIVE LAYER 5: VELVET MOSS & LICHEN ---
+      if (State.moss > 0.05) {
+        let mossNoise = core.fbm(u * 14, v * 14, 14, 14, 3);
+        let mossVal = mossNoise * floraWeight * State.moss * 1.6;
+        if (mossVal > 0.38) {
+          baseCol = lerpRGB(baseCol, [72, 134, 46], Math.min(1.0, (mossVal - 0.38) * 2.5));
+        }
+      }
+
+      // --- ADDITIVE LAYER 6: BOTTOM GRASS CLIMB ---
+      if (State.grassClimb > 0.05) {
+        let bottomDist = Math.max(0, v - (1.0 - State.grassClimb * 0.45));
+        if (bottomDist > 0) {
+          let blade = Math.sin(u * 64.0 + core.noise2D(u * 16, v * 16, 16, 16) * 4);
+          if (blade > 0.1) {
+            baseCol = lerpRGB(baseCol, [92, 162, 48], (bottomDist / 0.45) * 2.0);
+          }
+        }
+      }
+
+      return baseCol;
+    }
+
+    function generateTexture() {
+      const res = State.resolution;
+      masterBuffer.width = res;
+      masterBuffer.height = res;
+
+      core.reseed(State.seed);
+      loadActivePalette();
+
+      const imgData = masterCtx.createImageData(res, res);
+      const data = imgData.data;
+
+      for (let y = 0; y < res; y++) {
+        let v = y / res;
+        for (let x = 0; x < res; x++) {
+          let u = x / res;
+          let col = synthesizePixel(u, v);
+
+          let r = Math.max(12, Math.min(244, Math.round(col[0])));
+          let g = Math.max(12, Math.min(244, Math.round(col[1])));
+          let b = Math.max(12, Math.min(244, Math.round(col[2])));
+
+          let idx = (y * res + x) * 4;
+          data[idx]     = r;
+          data[idx + 1] = g;
+          data[idx + 2] = b;
+          data[idx + 3] = 255;
+        }
+      }
+
+      masterCtx.putImageData(imgData, 0, 0);
+      drawViewport();
+      updateHUD();
+    }
+
+    /* THE CRUCIAL CRISP PIXEL FIX */
+    function drawViewport() {
+      viewCanvas.width = 512;
+      viewCanvas.height = 512;
+
+      viewCtx.imageSmoothingEnabled = false;
+      viewCtx.webkitImageSmoothingEnabled = false;
+      viewCtx.mozImageSmoothingEnabled = false;
+      viewCtx.msImageSmoothingEnabled = false;
+
+      if (State.viewMode === 'single') {
+        viewCtx.drawImage(masterBuffer, 0, 0, 512, 512);
+      } else if (State.viewMode === 'tiled') {
+        let ts = 512 / 3;
+        for (let ty = 0; ty < 3; ty++) {
+          for (let tx = 0; tx < 3; tx++) {
+            viewCtx.drawImage(masterBuffer, tx * ts, ty * ts, ts, ts);
+          }
+        }
+      } else if (State.viewMode === 'cube') {
+        render3DVoxelCube();
+      }
+    }
+
+    function render3DVoxelCube() {
+      viewCtx.clearRect(0, 0, 512, 512);
+      let cx = 256, cy = 256 + 10, size = 130;
+
+      viewCtx.save();
+      viewCtx.translate(cx, cy - size * 0.85);
+      viewCtx.transform(1, 0.5, -1, 0.5, 0, 0);
+      viewCtx.scale(size / masterBuffer.width * 0.72, size / masterBuffer.height * 0.72);
+      viewCtx.drawImage(masterBuffer, 0, 0);
+      viewCtx.restore();
+
+      viewCtx.save();
+      viewCtx.translate(cx, cy + size * 0.15);
+      viewCtx.transform(1, 0.5, 0, 1, 0, 0);
+      viewCtx.scale(size / masterBuffer.width * 0.72, size / masterBuffer.height * 0.72);
+      viewCtx.drawImage(masterBuffer, 0, 0);
+      viewCtx.restore();
+
+      viewCtx.save();
+      viewCtx.translate(cx, cy + size * 0.15);
+      viewCtx.transform(-1, 0.5, 0, 1, 0, 0);
+      viewCtx.scale(size / masterBuffer.width * 0.72, size / masterBuffer.height * 0.72);
+      viewCtx.drawImage(masterBuffer, 0, 0);
+      viewCtx.restore();
+    }
+
+    function loadActivePalette() {
+      let pObj = Palettes[State.material] || Palettes.stone_bricks;
+      State.activeColors = [...(pObj[State.paletteType] || pObj.albedo)];
+      renderActiveSwatches();
+    }
+
+    function renderActiveSwatches() {
+      const container = document.getElementById('activeSwatches');
+      container.innerHTML = '';
+      State.activeColors.forEach((hex) => {
+        let chip = document.createElement('div');
+        chip.className = 'color-chip';
+        chip.style.background = hex;
+        container.appendChild(chip);
+      });
+    }
+
+    function setToast(msg) {
+      const el = document.getElementById('statusToast');
+      el.textContent = msg;
+      el.style.opacity = '1';
+      setTimeout(() => { el.style.opacity = '0.85'; }, 1500);
+    }
+
+    function updateHUD() {
+      document.getElementById('hudResBadge').textContent = `${State.resolution} × ${State.resolution} px`;
+      document.getElementById('lineCountVal').textContent = `${State.numRows} Courses (Lines)`;
+      document.getElementById('colCountVal').textContent = `${State.numCols} Bricks / Row`;
+    }
+
+    /* ==========================================================================
+       4. USER INTERFACE BINDINGS
+       ========================================================================== */
+    function initUI() {
+      // 1. New Seed (Color Shift & noise micro-variation ONLY)
+      document.getElementById('btnSeed').onclick = () => {
+        State.seed = Math.floor(Math.random() * 999999);
+        document.getElementById('seedInput').value = State.seed;
+        document.getElementById('seedVal').textContent = State.seed;
+        generateTexture();
+        setToast('Seed Applied (Geometry Preserved)');
+      };
+
+      // 2. New Variation (Cultural Palettes - Keeps Shape)
+      document.getElementById('btnVariation').onclick = () => {
+        const palKeys = ['albedo', 'realistic', 'fantasy', 'shadow'];
+        State.paletteType = palKeys[Math.floor(Math.random() * palKeys.length)];
+        document.getElementById('palTypeSelect').value = State.paletteType;
+        generateTexture();
+        setToast(`Palette: ${State.paletteType.toUpperCase()} Applied`);
+      };
+
+      // Steppers for line count (Preserved geometry)
+      document.getElementById('btnLinePlus').onclick = () => {
+        const lineSteps = [2, 3, 4, 6, 8, 12, 16];
+        let idx = lineSteps.indexOf(State.numRows);
+        if (idx < lineSteps.length - 1) State.numRows = lineSteps[idx + 1];
+        generateTexture();
+      };
+      document.getElementById('btnLineMinus').onclick = () => {
+        const lineSteps = [2, 3, 4, 6, 8, 12, 16];
+        let idx = lineSteps.indexOf(State.numRows);
+        if (idx > 0) State.numRows = lineSteps[idx - 1];
+        generateTexture();
+      };
+
+      document.getElementById('btnColPlus').onclick = () => {
+        const colSteps = [1, 2, 3, 4, 6, 8];
+        let idx = colSteps.indexOf(State.numCols);
+        if (idx < colSteps.length - 1) State.numCols = colSteps[idx + 1];
+        generateTexture();
+      };
+      document.getElementById('btnColMinus').onclick = () => {
+        const colSteps = [1, 2, 3, 4, 6, 8];
+        let idx = colSteps.indexOf(State.numCols);
+        if (idx > 0) State.numCols = colSteps[idx - 1];
+        generateTexture();
+      };
+
+      // Brick Bond Shape Selector
+      document.getElementById('brickShapeSelect').onchange = (e) => {
+        State.shape = e.target.value;
+        generateTexture();
+      };
+
+      // Directional Selector Buttons (Flora)
+      document.querySelectorAll('.dir-btn[data-dir]').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.dir-btn[data-dir]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          State.floraDir = btn.dataset.dir;
+          generateTexture();
+          setToast(`Flora Direction: ${State.floraDir.toUpperCase()}`);
+        };
+      });
+
+      // Directional Selector Buttons (Damage)
+      document.querySelectorAll('.dir-btn[data-damdir]').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.dir-btn[data-damdir]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          State.damageDir = btn.dataset.damdir;
+          generateTexture();
+          setToast(`Damage Direction: ${State.damageDir.toUpperCase()}`);
+        };
+      });
+
+      // Layer Sliders with Instant Render
+      const bind = (id, valId, key, mult = 1.0) => {
+        document.getElementById(id).oninput = (e) => {
+          State[key] = parseFloat(e.target.value);
+          document.getElementById(valId).textContent = (State[key] * mult).toFixed(1);
+          generateTexture();
+        };
+      };
+      bind('paramMortar', 'mortarThickVal', 'mortarThick');
+      bind('paramBevel', 'bevelVal', 'bevel');
+      bind('paramLeaves', 'leavesVal', 'leaves');
+      bind('paramMoss', 'mossVal', 'moss');
+      bind('paramGrassClimb', 'grassClimbVal', 'grassClimb');
+      bind('paramImpact', 'impactVal', 'impact');
+      bind('paramBreak', 'breakVal', 'breaks');
+      bind('paramMud', 'mudVal', 'mud');
+      bind('paramWeather', 'weatherVal', 'weather');
+
+      // Tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById(btn.dataset.tab).classList.add('active');
+        };
+      });
+
+      // View Pills
+      document.querySelectorAll('.pill-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          State.viewMode = btn.dataset.view;
+          drawViewport();
+        };
+      });
+
+      document.getElementById('resSelect').onchange = (e) => {
+        State.resolution = parseInt(e.target.value, 10);
+        generateTexture();
+      };
+      document.getElementById('palTypeSelect').onchange = (e) => {
+        State.paletteType = e.target.value;
+        generateTexture();
+      };
+
+      // Export PNG
+      document.getElementById('btnExport').onclick = () => {
+        const a = document.createElement('a');
+        a.download = `${State.material}_${State.shape}_${State.resolution}px.png`;
+        a.href = masterBuffer.toDataURL('image/png');
+        a.click();
+        setToast('PNG Exported');
+      };
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initUI();
+      generateTexture();
+    });
+  </script>
+</body>
+</html>
